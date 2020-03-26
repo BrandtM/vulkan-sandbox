@@ -47,8 +47,23 @@ fn main() {
     )
         .unwrap();
 
+    let vertex_buffer2 = CpuAccessibleBuffer::from_iter(
+        device.clone(),
+        BufferUsage::all(),
+        false,
+        [
+            Vertex { position: [-1.0, -1.0] },
+            Vertex { position: [-0.9, -0.9] },
+            Vertex { position: [-0.95, -0.85] }
+        ]
+            .iter()
+            .cloned(),
+    )
+        .unwrap();
+
     let vs = vs::Shader::load(device.clone()).unwrap();
     let fs = fs::Shader::load(device.clone()).unwrap();
+    let fs2 = fs2::Shader::load(device.clone()).unwrap();
     let uniform_buffer = CpuBufferPool::<vs::ty::Data>::new(
         device.clone(),
         BufferUsage::all()
@@ -61,6 +76,23 @@ fn main() {
             .triangle_list()
             .viewports_dynamic_scissors_irrelevant(1)
             .fragment_shader(fs.main_entry_point(), ())
+            .render_pass(
+                Subpass::from(
+                    render_pass.clone(),
+                    0)
+                    .unwrap()
+            )
+            .build(device.clone())
+            .unwrap()
+    );
+
+    let pipeline2 = Arc::new(
+        GraphicsPipeline::start()
+            .vertex_input_single_buffer::<Vertex>()
+            .vertex_shader(vs.main_entry_point(), ())
+            .triangle_list()
+            .viewports_dynamic_scissors_irrelevant(1)
+            .fragment_shader(fs2.main_entry_point(), ())
             .render_pass(
                 Subpass::from(
                     render_pass.clone(),
@@ -156,7 +188,18 @@ fn main() {
                     PersistentDescriptorSet::start(
                         layout.clone()
                     )
-                        .add_buffer(uniform_buffer_subbuffer)
+                        .add_buffer(uniform_buffer_subbuffer.clone())
+                        .unwrap()
+                        .build()
+                        .unwrap()
+                );
+
+                let layout2 = pipeline2.descriptor_set_layout(0).unwrap();
+                let set2 = Arc::new(
+                    PersistentDescriptorSet::start(
+                        layout2.clone()
+                    )
+                        .add_buffer(uniform_buffer_subbuffer.clone())
                         .unwrap()
                         .build()
                         .unwrap()
@@ -167,13 +210,21 @@ fn main() {
                     queue.family(),
                 )
                     .unwrap()
-                    .begin_render_pass(framebuffers[image_num].clone(), false, clear_values)
+                    .begin_render_pass(framebuffers[image_num].clone(), false, clear_values.clone())
                     .unwrap()
                     .draw(
                         pipeline.clone(),
                         &dynamic_state,
                         vertex_buffer.clone(),
                         set.clone(),
+                        (),
+                    )
+                    .unwrap()
+                    .draw(
+                        pipeline2.clone(),
+                        &dynamic_state,
+                        vertex_buffer2.clone(),
+                        set2.clone(),
                         (),
                     )
                     .unwrap()
@@ -228,5 +279,12 @@ mod fs {
     vulkano_shaders::shader!{
         ty: "fragment",
         path: "src/frag.glsl"
+    }
+}
+
+mod fs2 {
+    vulkano_shaders::shader!{
+        ty: "fragment",
+        path: "src/frag2.glsl"
     }
 }
